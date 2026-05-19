@@ -22,6 +22,7 @@ def _extract_promotions(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     promotions: List[Dict[str, Any]] = []
     for item in items:
         data_box = item.get("gridbox", {}).get("data", {})
+        meta_box = item.get("gridbox", {}).get("meta", {})
         price_data = data_box.get("price", {})
         discount = price_data.get("discount") or {}
         percentage = discount.get("percentageDiscount")
@@ -71,6 +72,20 @@ def _extract_promotions(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             if not (start_date <= now <= end_date):
                 continue
 
+        # Extract category if available. The path is
+        # gridbox.meta.wonCategoryBreadcrumbs[0][1].name
+        category = None
+        try:
+            breadcrumbs = meta_box.get("wonCategoryBreadcrumbs", [])
+            if breadcrumbs and isinstance(breadcrumbs, list):
+                first = breadcrumbs[0]
+                if isinstance(first, list) and len(first) > 1:
+                    cat_dict = first[1]
+                    if isinstance(cat_dict, dict):
+                        category = cat_dict.get("name")
+        except Exception:
+            category = None
+
         promotions.append(
             {
                 "name": data_box.get("title", "Unknown"),
@@ -82,6 +97,7 @@ def _extract_promotions(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 "is_lidl_plus": bool(lidl_plus),
                 "start_date": start_date,
                 "end_date": end_date,
+                "category": category,
             }
         )
     return promotions
