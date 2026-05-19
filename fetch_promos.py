@@ -1,77 +1,96 @@
 import json
-import requests
-import time
 import os
+import time
+from typing import Any, Dict, List
 
-def fetch_promotions(output_file='promotions.json'):
-    base_url = "https://www.lidl.bg/q/api/search"
-    params = {
-        "offset": 0,
-        "fetchsize": 100,
-        "locale": "bg_BG",
-        "assortment": "BG",
-        "version": "2.1.0",
-        "category.id": "10068374"
-    }
+import requests
 
-    all_promotions = []
+BASE_URL = "https://www.lidl.bg/q/api/search"
+DEFAULT_PARAMS = {
+    "offset": 0,
+    "fetchsize": 100,
+    "locale": "bg_BG",
+    "assortment": "BG",
+    "version": "2.1.0",
+    "category.id": "10068374",
+}
+
+
+def _extract_promotions(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    promotions: List[Dict[str, Any]] = []
+    for item in items:
+        data_box = item.get("gridbox", {}).get("data", {})
+        price_data = data_box.get("price", {})
+        discount = price_data.get("discount") or {}
+        percentage = discount.get("percentageDiscount")
+
+        # Only include items with numeric percentage discounts.
+        if percentage is None:
+            continue
+
+        promotions.append(
+            {
+                "name": data_box.get("title", "Unknown"),
+                "current_price": price_data.get("price"),
+                "old_price": price_data.get("oldPrice"),
+                "discount_text": discount.get("discountText"),
+                "percentage": percentage,
+            }
+        )
+    return promotions
+
+
+def fetch_promos(output_file: str = "promotions.json") -> List[Dict[str, Any]]:
+    params = dict(DEFAULT_PARAMS)
+    all_promotions: List[Dict[str, Any]] = []
     offset = 0
 
     print("Fetching promotions from Lidl...")
-    while True:
-        params['offset'] = offset
-        try:
-            response = requests.get(base_url, params=params, timeout=10)
-            if response.status_code != 200:
-                print(f"Failed to fetch data at offset {offset}. Status code: {response.status_code}")
+    with requests.Session() as session:
+        while True:
+            params["offset"] = offset
+            try:
+                response = session.get(BASE_URL, params=params, timeout=15)
+                response.raise_for_status()
+                data = response.json()
+            except requests.RequestException as exc:
+                print(f"Request failed at offset {offset}: {exc}")
                 break
-            
-            data = response.json()
-            items = data.get('items', [])
-            
+            except ValueError as exc:
+                print(f"Invalid JSON at offset {offset}: {exc}")
+                break
+
+            items = data.get("items", [])
             if not items:
                 break
-                
-            for item in items:
-                gridbox = item.get('gridbox', {})
-                data_box = gridbox.get('data', {})
-                name = data_box.get('title', 'Unknown')
-                price_data = data_box.get('price', {})
-                discount = price_data.get('discount')
-                
-                # Roadmap 1: Only include items that have percentage discount
-                if discount and discount.get("percentageDiscount") is not None:
-                    all_promotions.append({
-                        'name': name,
-                        'current_price': price_data.get('price'),
-                        'old_price': price_data.get('oldPrice'),
-                        'discount_text': discount.get('discountText'),
-                        'percentage': discount.get('percentageDiscount')
-                    })
-            
-            if len(items) < 100:
+
+            all_promotions.extend(_extract_promotions(items))
+
+            if len(items) < params["fetchsize"]:
                 break
-                
-            offset += 100
-            time.sleep(0.5) 
-            
-        except Exception as e:
-            print(f"Error: {e}")
-            break
 
-    # Roadmap 2: Sort by highest discount first
-    all_promotions.sort(key=lambda x: x['percentage'] if x['percentage'] is not None else 0, reverse=True)
+            offset += params["fetchsize"]
+            time.sleep(0.5)
 
-    # Save the full sorted list to file
-    with open(output_file, 'w', encoding='utf-8') as f:
-        json.dump(all_promotions, f, indent=2, ensure_ascii=False)
-    
+    all_promotions.sort(
+        key=lambda entry: entry.get("percentage") or 0, reverse=True
+    )
+
+    output_dir = os.path.dirname(output_file)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+
+    with open(output_file, "w", encoding="utf-8") as handle:
+        json.dump(all_promotions, handle, indent=2, ensure_ascii=False)
+
     print(f"Successfully saved {len(all_promotions)} promotions to {output_file}")
-    
-    # Roadmap 3: Output top 15
+
     print("\n--- Top 15 Promotions ---")
     for item in all_promotions[:15]:
         print(f"{item['name']}: {item['percentage']}%")
 
-if __name__ == '__main__':
-    fetch_promotions()
+    return all_promotions
+
+
+if __name__ == "__main__":
+    fetch_promos()
