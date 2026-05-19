@@ -26,37 +26,37 @@ def _extract_promotions(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         price_data = data_box.get("price", {})
         discount = price_data.get("discount") or {}
         percentage = discount.get("percentageDiscount")
-        
+
         # Check for Lidl Plus promotions
         lidl_plus = data_box.get("lidlPlus")
         if lidl_plus:
             lidl_plus_price = lidl_plus[0].get("price", {})
             current_price = lidl_plus_price.get("price")
             old_price = lidl_plus_price.get("oldPrice")
-            
+
             # Calculate percentage for Lidl Plus items
             if current_price and old_price and old_price > 0:
                 percentage = round((1 - current_price / old_price) * 100)
             else:
                 percentage = None
-            
+
             discount_text = discount.get("discountText") or "Lidl Plus"
         else:
             # Standard promotions
             current_price = price_data.get("price")
             old_price = price_data.get("oldPrice")
             discount_text = discount.get("discountText")
-            
+
             # Attempt to derive percentage from discount_text (e.g., "-20%" or "20%")
             if percentage is None and discount_text:
-                match = re.search(r'^-?(\d+)%', discount_text)
+                match = re.search(r"^-?(\d+)%", discount_text)
                 if match:
                     percentage = int(match.group(1))
 
         # Only include items with numeric percentage discounts.
         if percentage is None:
             continue
-            
+
         # Extract dates from stockAvailability
         badge_info = data_box.get("stockAvailability", {}).get("badgeInfoV2", [])
         start_date = None
@@ -91,7 +91,7 @@ def _extract_promotions(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             "За домашни любимци",
             "Вино и алкохол",
             "Козметика и грижа за тялото",
-            "Снаксове и сладки изкушения"
+            "Снаксове и сладки изкушения",
         }
         if category in exclude_categories:
             continue
@@ -145,9 +145,7 @@ def fetch_promos(output_file: str = "promotions.json") -> List[Dict[str, Any]]:
             offset += params["fetchsize"]
             time.sleep(0.5)
 
-    all_promotions.sort(
-        key=lambda entry: entry.get("percentage") or 0, reverse=True
-    )
+    all_promotions.sort(key=lambda entry: entry.get("percentage") or 0, reverse=True)
 
     output_dir = os.path.dirname(output_file)
     if output_dir:
@@ -160,13 +158,27 @@ def fetch_promos(output_file: str = "promotions.json") -> List[Dict[str, Any]]:
 
     print("\n--- Top 25 Promotions ---")
     for item in all_promotions[:25]:
-        start = datetime.fromtimestamp(item['start_date']).strftime('%d/%m') if item.get('start_date') else '??/??'
-        end = datetime.fromtimestamp(item['end_date']).strftime('%d/%m') if item.get('end_date') else '??/??'
-        
+        start = (
+            datetime.fromtimestamp(item["start_date"]).strftime("%d/%m")
+            if item.get("start_date")
+            else "??/??"
+        )
+        end = (
+            datetime.fromtimestamp(item["end_date"]).strftime("%d/%m")
+            if item.get("end_date")
+            else "??/??"
+        )
+
         # Ensure full URL
-        full_url = f"https://www.lidl.bg{item['url']}" if item['url'] and not item['url'].startswith('http') else item['url']
-        
-        print(f"[{item['name']}]({full_url}): {item['current_price']}€ ({item['percentage']}% off) - {start}-{end}")
+        full_url = (
+            f"https://www.lidl.bg{item['url']}"
+            if item["url"] and not item["url"].startswith("http")
+            else item["url"]
+        )
+
+        print(
+            f"[{item['name']}]({full_url}): {item['current_price']}€ ({item['percentage']}% off) - {start}-{end}"
+        )
 
     return all_promotions
 
