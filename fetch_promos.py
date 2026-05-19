@@ -44,7 +44,7 @@ def fetch_promotions(output_file='promotions.json'):
                 old_price = price_data.get('oldPrice')
                 
                 # Only include items that have discount info
-                if discount:
+                if discount and discount.get("discountText"):
                     all_promotions.append({
                         'name': name,
                         'current_price': current_price,
