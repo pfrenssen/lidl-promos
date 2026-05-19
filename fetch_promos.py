@@ -39,16 +39,12 @@ def fetch_promotions(output_file='promotions.json'):
                 price_data = data_box.get('price', {})
                 discount = price_data.get('discount')
                 
-                # Extract price information
-                current_price = price_data.get('price')
-                old_price = price_data.get('oldPrice')
-                
-                # Only include items that have discount info
-                if discount and discount.get("discountText"):
+                # Roadmap 1: Only include items that have percentage discount
+                if discount and discount.get("percentageDiscount") is not None:
                     all_promotions.append({
                         'name': name,
-                        'current_price': current_price,
-                        'old_price': old_price,
+                        'current_price': price_data.get('price'),
+                        'old_price': price_data.get('oldPrice'),
                         'discount_text': discount.get('discountText'),
                         'percentage': discount.get('percentageDiscount')
                     })
@@ -63,10 +59,19 @@ def fetch_promotions(output_file='promotions.json'):
             print(f"Error: {e}")
             break
 
+    # Roadmap 2: Sort by highest discount first
+    all_promotions.sort(key=lambda x: x['percentage'] if x['percentage'] is not None else 0, reverse=True)
+
+    # Save the full sorted list to file
     with open(output_file, 'w', encoding='utf-8') as f:
         json.dump(all_promotions, f, indent=2, ensure_ascii=False)
     
     print(f"Successfully saved {len(all_promotions)} promotions to {output_file}")
+    
+    # Roadmap 3: Output top 15
+    print("\n--- Top 15 Promotions ---")
+    for item in all_promotions[:15]:
+        print(f"{item['name']}: {item['percentage']}%")
 
 if __name__ == '__main__':
     fetch_promotions()
