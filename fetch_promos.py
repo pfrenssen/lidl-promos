@@ -23,6 +23,26 @@ def _extract_promotions(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         price_data = data_box.get("price", {})
         discount = price_data.get("discount") or {}
         percentage = discount.get("percentageDiscount")
+        
+        # Check for Lidl Plus promotions
+        lidl_plus = data_box.get("lidlPlus")
+        if lidl_plus:
+            lidl_plus_price = lidl_plus[0].get("price", {})
+            current_price = lidl_plus_price.get("price")
+            old_price = lidl_plus_price.get("oldPrice")
+            
+            # Calculate percentage for Lidl Plus items
+            if current_price and old_price and old_price > 0:
+                percentage = round((1 - current_price / old_price) * 100)
+            else:
+                percentage = None
+            
+            discount_text = discount.get("discountText") or "Lidl Plus"
+        else:
+            # Standard promotions
+            current_price = price_data.get("price")
+            old_price = price_data.get("oldPrice")
+            discount_text = discount.get("discountText")
 
         # Only include items with numeric percentage discounts.
         if percentage is None:
@@ -31,10 +51,12 @@ def _extract_promotions(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         promotions.append(
             {
                 "name": data_box.get("title", "Unknown"),
-                "current_price": price_data.get("price"),
-                "old_price": price_data.get("oldPrice"),
-                "discount_text": discount.get("discountText"),
+                "current_price": current_price,
+                "old_price": old_price,
+                "discount_text": discount_text,
                 "percentage": percentage,
+                "url": data_box.get("canonicalUrl"),
+                "is_lidl_plus": bool(lidl_plus),
             }
         )
     return promotions
