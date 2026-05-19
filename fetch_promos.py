@@ -1,6 +1,8 @@
 import json
 import os
 import time
+import re
+from datetime import datetime
 from typing import Any, Dict, List
 
 import requests
@@ -43,10 +45,31 @@ def _extract_promotions(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             current_price = price_data.get("price")
             old_price = price_data.get("oldPrice")
             discount_text = discount.get("discountText")
+            
+            # Attempt to derive percentage from discount_text (e.g., "-20%" or "20%")
+            if percentage is None and discount_text:
+                match = re.search(r'^-?(\d+)%', discount_text)
+                if match:
+                    percentage = int(match.group(1))
 
         # Only include items with numeric percentage discounts.
         if percentage is None:
             continue
+            
+        # Extract dates from stockAvailability
+        badge_info = data_box.get("stockAvailability", {}).get("badgeInfoV2", [])
+        start_date = None
+        end_date = None
+        if badge_info:
+            first_badge = badge_info[0]
+            start_date = first_badge.get("validFrom")
+            end_date = first_badge.get("validUntil")
+
+        # Exclude promotions not valid today
+        now = time.time()
+        if start_date and end_date:
+            if not (start_date <= now <= end_date):
+                continue
 
         promotions.append(
             {
@@ -57,6 +80,8 @@ def _extract_promotions(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 "percentage": percentage,
                 "url": data_box.get("canonicalUrl"),
                 "is_lidl_plus": bool(lidl_plus),
+                "start_date": start_date,
+                "end_date": end_date,
             }
         )
     return promotions
@@ -107,9 +132,15 @@ def fetch_promos(output_file: str = "promotions.json") -> List[Dict[str, Any]]:
 
     print(f"Successfully saved {len(all_promotions)} promotions to {output_file}")
 
-    print("\n--- Top 15 Promotions ---")
-    for item in all_promotions[:15]:
-        print(f"{item['name']}: {item['percentage']}%")
+    print("\n--- Top 25 Promotions ---")
+    for item in all_promotions[:25]:
+        start = datetime.fromtimestamp(item['start_date']).strftime('%d/%m') if item.get('start_date') else '??/??'
+        end = datetime.fromtimestamp(item['end_date']).strftime('%d/%m') if item.get('end_date') else '??/??'
+        
+        # Ensure full URL
+        full_url = f"https://www.lidl.bg{item['url']}" if item['url'] and not item['url'].startswith('http') else item['url']
+        
+        print(f"[{item['name']}]({full_url}): {item['current_price']}€ ({item['percentage']}% off) - {start}-{end}")
 
     return all_promotions
 
