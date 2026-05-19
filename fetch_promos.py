@@ -86,6 +86,16 @@ def _extract_promotions(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         except Exception:
             category = None
 
+        # Exclude unwanted categories
+        exclude_categories = {
+            "За домашни любимци",
+            "Вино и алкохол",
+            "Козметика и грижа за тялото",
+            "Снаксове и сладки изкушения"
+        }
+        if category in exclude_categories:
+            continue
+
         promotions.append(
             {
                 "name": data_box.get("title", "Unknown"),
